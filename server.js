@@ -947,6 +947,7 @@ function snapshotFor(requestingPlayer) {
 
   const visibleFood = food.filter(f => Math.abs(f.x - viewX) < viewRange && Math.abs(f.y - viewY) < viewRange);
   const visibleViruses = viruses.filter(v => Math.abs(v.x - viewX) < viewRange && Math.abs(v.y - viewY) < viewRange);
+  const foodPayload = visibleFood.length > 220 ? visibleFood.slice(0, 220) : visibleFood;
 
   return {
     type: 'snapshot',
@@ -955,7 +956,7 @@ function snapshotFor(requestingPlayer) {
     reset: resetTimer,
     leaderboard: board,
     players: playerData,
-    food: visibleFood.map(f => ({ id: f.id, x: f.x, y: f.y, r: f.r, color: f.color, kind: f.kind })),
+    food: foodPayload.map(f => ({ id: f.id, x: f.x, y: f.y, r: f.r, color: f.color, kind: f.kind })),
     viruses: visibleViruses.map(v => ({ id: v.id, x: v.x, y: v.y, r: v.r, color: v.color, kind: 'virus' }))
   };
 }

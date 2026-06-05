@@ -69,10 +69,11 @@
   // Smoother client-side easing. These are rates per second so motion stays
   // consistent on both high and low refresh-rate screens.
   const POSITION_SMOOTHING_RATE = 8.8;
+  const LOCAL_POSITION_SMOOTHING_RATE = 14;
   const RADIUS_SMOOTHING_RATE = 10.0;
-  const CAMERA_POSITION_RATE = 3.7;
+  const CAMERA_POSITION_RATE = 8;
   const CAMERA_ZOOM_RATE = 3.6;
-  const SNAPSHOT_MAX_EXTRAPOLATE = 0.10;
+  const SNAPSHOT_MAX_EXTRAPOLATE = 0.08;
   const IDLE_CAMERA_RATE = 1.2;
 
   nameInput.value = userName;
@@ -326,6 +327,7 @@
   const EPHEMERAL_FEED_MS = 6000;
   const seenChatKeys = new Set();
   const MAX_SEEN_CHAT = 60;
+  let chatLineCount = 0;
 
   function chatKey(item) {
     if (item.id != null) return `id:${item.id}`;
@@ -354,8 +356,13 @@
     line.textContent = message;
     if (color) line.style.color = color;
     activityFeed.appendChild(line);
-    const chatLines = activityFeed.querySelectorAll('.activity-line--chat');
-    while (chatLines.length > CHAT_FEED_MAX) chatLines[0].remove();
+    chatLineCount += 1;
+    while (chatLineCount > CHAT_FEED_MAX) {
+      const first = activityFeed.querySelector('.activity-line--chat');
+      if (!first) break;
+      first.remove();
+      chatLineCount -= 1;
+    }
   }
 
   function addEphemeralLine(message, color) {
@@ -516,6 +523,22 @@
     mouse.worldY = p.y;
   }
 
+  function getViewBounds(margin = 100) {
+    const halfW = width / (2 * camera.zoom);
+    const halfH = height / (2 * camera.zoom);
+    return {
+      minX: camera.x - halfW - margin,
+      maxX: camera.x + halfW + margin,
+      minY: camera.y - halfH - margin,
+      maxY: camera.y + halfH + margin
+    };
+  }
+
+  function inView(x, y, r, bounds) {
+    return x + r >= bounds.minX && x - r <= bounds.maxX &&
+      y + r >= bounds.minY && y - r <= bounds.maxY;
+  }
+
   function maybeSendTarget(force = false) {
     const now = performance.now();
     if (!force && now - lastTargetSent < 38) return;
@@ -532,9 +555,11 @@
   }
 
   function interpolateCells(dt, now) {
-    const posEase = frameEase(POSITION_SMOOTHING_RATE, dt);
+    const remoteEase = frameEase(POSITION_SMOOTHING_RATE, dt);
+    const localEase = frameEase(LOCAL_POSITION_SMOOTHING_RATE, dt);
     const radiusEase = frameEase(RADIUS_SMOOTHING_RATE, dt);
     for (const p of state.players.values()) {
+      const posEase = p.id === myId ? localEase : remoteEase;
       for (const cell of p.cells) {
         const predicted = predictedCellPosition(cell, now);
         cell.x = lerp(cell.x, predicted.x, posEase);
@@ -616,10 +641,17 @@
     ctx.arc(item.x, item.y, item.r, 0, Math.PI * 2);
   }
 
-  function drawFoodPellet(f) {
-    ctx.save();
+  function drawFoodPellet(f, simple = false) {
     const base = f.color || '#ffe000';
     const r = Math.max(3, f.r || 7);
+    if (simple) {
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, r, 0, Math.PI * 2);
+      ctx.fillStyle = base;
+      ctx.fill();
+      return;
+    }
+    ctx.save();
     const pulse = 1 + Math.sin(performance.now() / 420 + (f.id || 0)) * 0.035;
     ctx.fillStyle = base;
     ctx.strokeStyle = shade(base, f.kind === 'ejected' ? 0.55 : 0.70);
@@ -638,7 +670,7 @@
 
   function drawVirus(v) {
     ctx.save();
-    const teeth = 78;
+    const teeth = 40;
     const outer = v.r * 1.02;
     const inner = v.r * 0.945;
 
@@ -695,15 +727,9 @@
   }
 
   function splitStretchInfo(cell) {
-    const speed = Math.hypot(cell.vx || 0, cell.vy || 0);
-    const age = (performance.now() - (cell.birthTime || 0)) / 1000;
-    const birthStretch = clamp(1 - age / 0.42, 0, 1) * 0.30;
-    const boostStretch = clamp(speed / 520, 0, 1) * 0.42;
-    const amount = Math.max(birthStretch, boostStretch);
-    return {
-      amount,
-      angle: speed > 5 ? Math.atan2(cell.vy || 0, cell.vx || 0) : 0
-    };
+    // Keep split cells round — stretch was causing a wrong initial orientation
+    // before velocity synced, then snapping back to a circle.
+    return { amount: 0, angle: 0 };
   }
 
   function getCellShape(cell, segments) {
@@ -745,9 +771,11 @@
     const mold = wallMoldInfo(cell, radius);
     if (!split) split = splitStretchInfo(cell);
     const molded = mold.pressure > 0.001;
-    const segments = Math.max(92, Math.min(168, Math.floor(radius * 1.22)));
-    const shape = getCellShape(cell, segments);
-    updateCellShape(cell, shape, radius);
+    const viewDist = Math.hypot(cell.x - camera.x, cell.y - camera.y);
+    const detail = viewDist > 1400 ? 0.55 : viewDist > 800 ? 0.78 : 1;
+    const segments = Math.max(40, Math.min(72, Math.floor(radius * 0.75 * detail)));
+    const shape = radius > 24 ? getCellShape(cell, segments) : null;
+    if (shape) updateCellShape(cell, shape, radius);
 
     const half = mold.half;
     const cx = cell.x + mold.offsetX;
@@ -763,7 +791,7 @@
 
       // Avoid noisy points exactly on the flattened wall side. This is what
       // stops the folded/creased look while keeping the rest of the blob alive.
-      let organic = radius > 18 ? shape.values[idx] * radius : 0;
+      let organic = radius > 18 && shape ? shape.values[idx] * radius : 0;
       if (molded) {
         const onFlatSide =
           (mold.rightPressure > 0 && cos > 0.35) ||
@@ -821,8 +849,9 @@
     ctx.restore();
   }
 
-  function drawCell(cell, player) {
+  function drawCell(cell, player, bounds) {
     const r = cell.r;
+    if (bounds && !inView(cell.x, cell.y, r + 20, bounds)) return;
     const isMe = player.id === myId;
     const mold = wallMoldInfo(cell, r);
     const split = splitStretchInfo(cell);
@@ -849,10 +878,7 @@
 
     ctx.lineWidth = Math.max(3, r * 0.055);
     ctx.strokeStyle = isMe ? '#214bff' : shade(player.color, 0.78);
-    ctx.shadowColor = isMe ? 'rgba(33,75,255,0.48)' : 'transparent';
-    ctx.shadowBlur = isMe ? Math.max(6, r * 0.09) : 0;
     ctx.stroke();
-    ctx.shadowBlur = 0;
 
     if (isMe) {
       ctx.globalAlpha = 0.82;
@@ -1011,15 +1037,25 @@
     drawGrid();
     beginWorld();
     drawWorldBorder();
-    for (const f of state.food) drawFoodPellet(f);
-    for (const v of state.viruses) drawVirus(v);
-    const players = [...state.players.values()].sort((a, b) => {
-      const ar = Math.max(...a.cells.map(c => c.r), 0);
-      const br = Math.max(...b.cells.map(c => c.r), 0);
+    const bounds = getViewBounds(160);
+    const simpleFood = state.food.length > 100 || camera.zoom < 0.45;
+    for (const f of state.food) {
+      const fr = Math.max(3, f.r || 7);
+      if (inView(f.x, f.y, fr, bounds)) drawFoodPellet(f, simpleFood);
+    }
+    for (const v of state.viruses) {
+      if (inView(v.x, v.y, v.r || 80, bounds)) drawVirus(v);
+    }
+    const playerList = [...state.players.values()];
+    playerList.sort((a, b) => {
+      let ar = 0;
+      let br = 0;
+      for (const c of a.cells) if (c.r > ar) ar = c.r;
+      for (const c of b.cells) if (c.r > br) br = c.r;
       return ar - br;
     });
-    for (const p of players) {
-      for (const cell of p.cells) drawCell(cell, p);
+    for (const p of playerList) {
+      for (const cell of p.cells) drawCell(cell, p, bounds);
     }
     ctx.restore();
     drawTouchUi();
