@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>PvP Games - Aga</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <canvas id="canvas" tabindex="1"></canvas>
+
+  <div id="top-left" class="top-left">
+    <div id="mass-reset-timer" class="reset-pill">Reset 8:00</div>
+    <div id="current-mass-stats" class="mass-pill">Current Mass: 10</div>
+    <label class="theme-switch" title="Toggle dark theme">
+      <span class="moon">☾</span>
+      <input id="theme-toggle" type="checkbox" checked />
+      <span class="slider"></span>
+    </label>
+  </div>
+
+  <div id="leaderboard" class="leaderboard">
+    <div class="leaderboard-title">Leaderboard</div>
+    <div id="leaderboard-rows"></div>
+  </div>
+
+  <div id="activity-feed" class="activity-feed"></div>
+
+  <div id="chat-wrap" class="chat-wrap">
+    <input id="chat-input" maxlength="180" autocomplete="off" placeholder="Press enter to chat!" />
+  </div>
+
+  <button id="cashout-btn" class="cashout-btn" type="button">
+    <span id="cashout-progress" class="cashout-progress"></span>
+    <span id="cashout-text" class="cashout-text">CASHOUT • $5.00</span>
+  </button>
+
+  <div id="lobby" class="overlay show">
+    <div class="panel lobby-panel">
+      <div class="brand-dot"></div>
+      <h1>PvP Games - Aga</h1>
+      <p>Canvas + WebSocket multiplayer demo</p>
+      <input id="name-input" maxlength="18" placeholder="Username" />
+      <div class="skin-picker-title">Choose Skin</div>
+      <div id="skin-grid" class="skin-grid" aria-label="Choose a player skin"></div>
+      <button id="play-btn" type="button">PLAY</button>
+      <div class="controls-help">Move with mouse • Space split • W eject • C cashout</div>
+    </div>
+  </div>
+
+  <div id="result-modal" class="overlay">
+    <div class="panel result-panel">
+      <div id="result-icon" class="result-icon">!</div>
+      <h2 id="result-title">Game Over</h2>
+      <div id="result-body"></div>
+      <button id="respawn-btn" type="button">RETURN TO LOBBY</button>
+    </div>
+  </div>
+
+  <script src="client.js"></script>
+</body>
+</html>

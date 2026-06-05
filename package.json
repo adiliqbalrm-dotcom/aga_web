@@ -1,0 +1,14 @@
+{
+  "name": "pvp-agar-style-game",
+  "version": "1.0.0",
+  "description": "Original HTML5 Canvas + WebSocket multiplayer Agar-style browser game demo.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}
