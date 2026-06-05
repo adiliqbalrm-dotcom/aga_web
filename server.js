@@ -358,17 +358,28 @@ function createPlayer({ ws = null, name = 'Player', bot = false, skin = '' } = {
   return player;
 }
 
+function botSpawnStats() {
+  const roll = Math.random();
+  let mass;
+  if (roll < 0.35) mass = random(7, 13);       // small bots
+  else if (roll < 0.78) mass = random(14, 28); // medium bots
+  else mass = random(30, 62);                  // bigger target bots
+  const value = Math.max(1.5, mass * random(0.34, 0.62));
+  return { radius: radiusFromMass(mass), value: Number(value.toFixed(2)) };
+}
+
 function spawnPlayer(player) {
   const p = spawnPoint(500);
   if (player.bot && !player.skin) {
     player.skin = AVAILABLE_SKINS[botSpawnIndex++ % AVAILABLE_SKINS.length];
   }
-  player.cells = [makeCell(player, p.x, p.y, START_RADIUS, START_NET_WORTH)];
+  const stats = player.bot ? botSpawnStats() : { radius: START_RADIUS, value: START_NET_WORTH };
+  player.cells = [makeCell(player, p.x, p.y, stats.radius, stats.value)];
   player.target = { x: p.x + random(-500, 500), y: p.y + random(-500, 500) };
   player.alive = true;
   player.joined = true;
   player.kills = 0;
-  player.money = START_NET_WORTH;
+  player.money = stats.value;
   player.cashout = { active: false, timer: 0, locked: false };
   player.joinedAt = Date.now();
   send(player, { type: 'spawned', id: player.id, world: { size: WORLD_SIZE } });

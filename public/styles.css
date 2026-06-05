@@ -73,6 +73,33 @@ body {
   border: 2px solid rgba(255, 255, 255, 0.4);
   border-radius: 18px;
   background: rgba(0, 0, 0, 0.55);
+  transition: background 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.theme-switch.dark {
+  background: rgba(0, 0, 0, 0.68);
+  border-color: rgba(241, 196, 15, 0.70);
+  box-shadow: 0 0 12px rgba(241, 196, 15, 0.18);
+}
+
+.theme-switch.light {
+  background: rgba(255, 255, 255, 0.78);
+  border-color: rgba(60, 150, 255, 0.65);
+  box-shadow: 0 0 12px rgba(60, 150, 255, 0.20);
+}
+
+.theme-switch.light .moon {
+  color: #2377df;
+}
+
+.theme-switch.dark .slider {
+  background: #f1c40f;
+  transform: translateX(3px);
+}
+
+.theme-switch.light .slider {
+  background: #2377df;
+  transform: translateX(-3px);
 }
 
 .theme-switch input {
@@ -199,7 +226,7 @@ body {
 
 .activity-line {
   margin-top: 8px;
-  animation: fadeLine 8s ease forwards;
+  opacity: 1;
 }
 
 .chat-wrap {
@@ -239,6 +266,11 @@ body {
 
 .overlay.show {
   display: flex;
+  animation: overlayFadeIn 220ms ease-out both;
+}
+
+.overlay.show .panel {
+  animation: panelFadeIn 260ms ease-out both;
 }
 
 .panel {
@@ -310,9 +342,23 @@ body {
   color: var(--gold);
 }
 
-@keyframes fadeLine {
-  0%, 45% { opacity: 1; }
-  100% { opacity: 0; }
+
+.result-countdown {
+  margin: -8px 0 18px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+
+@keyframes overlayFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes panelFadeIn {
+  from { opacity: 0; transform: translateY(18px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 @keyframes pulse {

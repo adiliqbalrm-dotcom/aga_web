@@ -18,6 +18,8 @@
   const resultIcon = document.getElementById('result-icon');
   const respawnBtn = document.getElementById('respawn-btn');
   const themeToggle = document.getElementById('theme-toggle');
+  const themeSwitch = document.querySelector('.theme-switch');
+  const themeIcon = document.querySelector('.theme-switch .moon');
   const skinGrid = document.getElementById('skin-grid');
 
   let dpr = 1;
@@ -31,6 +33,7 @@
   let darkTheme = localStorage.getItem('aga-theme-preference') !== 'false';
   let selectedSkin = localStorage.getItem('selected-skin') || 'panther';
   let lastFrameTime = performance.now();
+  let resultCountdownTimer = null;
 
 
 
@@ -44,7 +47,7 @@
 
   const state = {
     worldSize: 7000,
-    reset: 480,
+    reset: 600,
     players: new Map(),
     food: [],
     viruses: [],
@@ -66,14 +69,16 @@
 
   // Smoother client-side easing. These are rates per second so motion stays
   // consistent on both high and low refresh-rate screens.
-  const POSITION_SMOOTHING_RATE = 13.0;
-  const RADIUS_SMOOTHING_RATE = 11.5;
-  const CAMERA_POSITION_RATE = 4.6;
-  const CAMERA_ZOOM_RATE = 4.2;
+  const POSITION_SMOOTHING_RATE = 8.8;
+  const RADIUS_SMOOTHING_RATE = 10.0;
+  const CAMERA_POSITION_RATE = 3.7;
+  const CAMERA_ZOOM_RATE = 3.6;
+  const SNAPSHOT_PREDICTION_SECONDS = 0.075;
   const IDLE_CAMERA_RATE = 1.2;
 
   nameInput.value = userName;
   themeToggle.checked = darkTheme;
+  updateThemeSwitch();
   if (!AVAILABLE_SKINS.includes(selectedSkin)) selectedSkin = 'panther';
   buildSkinPicker();
 
@@ -87,6 +92,17 @@
 
   function frameEase(rate, dt) {
     return 1 - Math.exp(-rate * dt);
+  }
+
+  function updateThemeSwitch() {
+    if (!themeToggle) return;
+    themeToggle.checked = darkTheme;
+    if (themeSwitch) {
+      themeSwitch.classList.toggle('dark', darkTheme);
+      themeSwitch.classList.toggle('light', !darkTheme);
+      themeSwitch.title = darkTheme ? 'Dark mode on' : 'Light mode on';
+    }
+    if (themeIcon) themeIcon.textContent = darkTheme ? '☾' : '☀';
   }
 
   function formatTime(seconds) {
@@ -190,6 +206,10 @@
   }
 
   function returnToSelection() {
+    if (resultCountdownTimer) {
+      clearInterval(resultCountdownTimer);
+      resultCountdownTimer = null;
+    }
     resultModal.className = 'overlay';
     resultModal.classList.remove('show', 'result-death', 'result-win');
     lobby.classList.add('show');
@@ -207,6 +227,10 @@
       case 'spawned':
         myId = data.id;
         if (data.world) state.worldSize = data.world.size;
+        if (resultCountdownTimer) {
+          clearInterval(resultCountdownTimer);
+          resultCountdownTimer = null;
+        }
         resultModal.className = 'overlay';
         resultModal.classList.remove('show', 'result-death', 'result-win');
         lobby.classList.remove('show');
@@ -309,8 +333,24 @@
     line.textContent = message;
     if (color) line.style.color = color;
     activityFeed.appendChild(line);
-    while (activityFeed.children.length > 8) activityFeed.removeChild(activityFeed.firstChild);
-    setTimeout(() => line.remove(), 8500);
+    while (activityFeed.children.length > 10) activityFeed.removeChild(activityFeed.firstChild);
+  }
+
+  function startFailCountdown(seconds = 5) {
+    if (resultCountdownTimer) clearInterval(resultCountdownTimer);
+    let left = seconds;
+    const countdownEl = document.getElementById('result-countdown');
+    const update = () => {
+      if (countdownEl) countdownEl.textContent = `Returning to lobby in ${left}s`;
+      if (left <= 0) {
+        clearInterval(resultCountdownTimer);
+        resultCountdownTimer = null;
+        returnToSelection();
+      }
+      left -= 1;
+    };
+    update();
+    resultCountdownTimer = setInterval(update, 1000);
   }
 
   function showDeathResult(data) {
@@ -324,12 +364,18 @@
       <div class="result-stats">
         <div class="result-stat"><div class="result-stat-label">Survival Time</div><div class="result-stat-value">${formatTime(data.timeAlive)}</div></div>
         <div class="result-stat"><div class="result-stat-label">Kills</div><div class="result-stat-value">${Number(data.kills || 0)}</div></div>
-      </div>`;
-    respawnBtn.textContent = 'PLAYER SELECTION';
+      </div>
+      <div id="result-countdown" class="result-countdown">Returning to lobby in 5s</div>`;
+    respawnBtn.textContent = 'RETURN TO LOBBY';
     resultModal.classList.add('show');
+    startFailCountdown(5);
   }
 
   function showCashoutResult(data) {
+    if (resultCountdownTimer) {
+      clearInterval(resultCountdownTimer);
+      resultCountdownTimer = null;
+    }
     cashoutBtn.style.display = 'none';
     gameVisible = false;
     resultModal.className = 'overlay show result-win';
@@ -343,7 +389,7 @@
         <div class="result-stat"><div class="result-stat-label">Time Played</div><div class="result-stat-value">${formatTime(data.timeAlive)}</div></div>
         <div class="result-stat"><div class="result-stat-label">Status</div><div class="result-stat-value">Paid</div></div>
       </div>`;
-    respawnBtn.textContent = 'PLAYER SELECTION';
+    respawnBtn.textContent = 'RETURN TO LOBBY';
     resultModal.classList.add('show');
   }
 
@@ -446,8 +492,10 @@
     const radiusEase = frameEase(RADIUS_SMOOTHING_RATE, dt);
     for (const p of state.players.values()) {
       for (const cell of p.cells) {
-        cell.x = lerp(cell.x, cell.tx, posEase);
-        cell.y = lerp(cell.y, cell.ty, posEase);
+        const predictedX = cell.tx + (cell.vx || 0) * SNAPSHOT_PREDICTION_SECONDS;
+        const predictedY = cell.ty + (cell.vy || 0) * SNAPSHOT_PREDICTION_SECONDS;
+        cell.x = lerp(cell.x, predictedX, posEase);
+        cell.y = lerp(cell.y, predictedY, posEase);
         cell.r = lerp(cell.r, cell.tr, radiusEase);
       }
     }
@@ -995,6 +1043,7 @@
   respawnBtn.addEventListener('click', returnToSelection);
   themeToggle.addEventListener('change', () => {
     darkTheme = themeToggle.checked;
+    updateThemeSwitch();
     localStorage.setItem('aga-theme-preference', String(darkTheme));
   });
 
