@@ -106,3 +106,10 @@ This is an original local demo implementation. The money/cashout values are simu
 - Replaced the main panther skin with a sharper HD version based on the provided reference image.
 - Added multiple HD panther-style variants: blue, gold, red, violet, and emerald.
 - Updated the skin picker so these new HD skins are available in the project.
+
+
+## v9 changes
+
+- Kept only the exact provided panther skin and removed the similar panther variants.
+- Normalized all skin assets to 512x512 and applied sharpening/contrast enhancement for consistent HD-style presentation.
+- Reduced online lag by setting tick rate to 30, snapshot rate to 12, food count to 800, virus count to 7, and sending only nearby food/viruses within a 1800 range.

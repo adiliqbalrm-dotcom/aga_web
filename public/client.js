@@ -35,8 +35,7 @@
 
 
   const AVAILABLE_SKINS = [
-    'panther', 'panther_blue', 'panther_gold', 'panther_red', 'panther_violet', 'panther_emerald',
-    'eye', 'cake', 'rider', 'blue_player', 'football_a', 'party_player',
+    'panther', 'eye', 'cake', 'rider', 'blue_player', 'football_a', 'party_player',
     'fire_player', 'basket_player', 'suit_player', 'football_b', 'flag_suit', 'flame_player',
     'meme_dog', 'bat', 'dino_skull', 'fly', 'alien', 'angler', 'purple_dino', 'red_dino'
   ];
@@ -75,7 +74,7 @@
 
   nameInput.value = userName;
   themeToggle.checked = darkTheme;
-  if (!AVAILABLE_SKINS.includes(selectedSkin)) selectedSkin = '';
+  if (!AVAILABLE_SKINS.includes(selectedSkin)) selectedSkin = 'panther';
   buildSkinPicker();
 
   function clamp(value, min, max) {

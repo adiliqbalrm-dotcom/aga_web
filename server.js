@@ -8,10 +8,10 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 
 const WORLD_SIZE = 7000;
 const HALF_WORLD = WORLD_SIZE / 2;
-const TICK_RATE = 60;
-const SNAPSHOT_RATE = 30;
-const FOOD_COUNT = 2350;
-const VIRUS_COUNT = 12;
+const TICK_RATE = 30;
+const SNAPSHOT_RATE = 12;
+const FOOD_COUNT = 800;
+const VIRUS_COUNT = 7;
 const TARGET_PLAYER_COUNT = 6;
 const START_RADIUS = Math.sqrt(1000); // visible mass ~= 10
 const START_NET_WORTH = 5;
@@ -897,6 +897,10 @@ function tick() {
 }
 
 function snapshotFor(requestingPlayer) {
+  const viewX = avgX(requestingPlayer);
+  const viewY = avgY(requestingPlayer);
+  const viewRange = 1800;
+
   const board = [...players.values()]
     .filter(p => p.alive && p.cells.length)
     .map(p => ({ id: p.id, name: p.name, netWorth: netWorth(p), me: p.id === requestingPlayer.id }))
@@ -917,6 +921,9 @@ function snapshotFor(requestingPlayer) {
       cells: p.cells.map(c => ({ id: c.id, x: c.x, y: c.y, r: c.r, value: Number(c.value || 0), vx: c.vx || 0, vy: c.vy || 0, mergeAt: c.mergeAt || 0 }))
     }));
 
+  const visibleFood = food.filter(f => Math.abs(f.x - viewX) < viewRange && Math.abs(f.y - viewY) < viewRange);
+  const visibleViruses = viruses.filter(v => Math.abs(v.x - viewX) < viewRange && Math.abs(v.y - viewY) < viewRange);
+
   return {
     type: 'snapshot',
     id: requestingPlayer.id,
@@ -924,8 +931,8 @@ function snapshotFor(requestingPlayer) {
     reset: resetTimer,
     leaderboard: board,
     players: playerData,
-    food: food.map(f => ({ id: f.id, x: f.x, y: f.y, r: f.r, color: f.color, kind: f.kind })),
-    viruses: viruses.map(v => ({ id: v.id, x: v.x, y: v.y, r: v.r, color: v.color, kind: 'virus' }))
+    food: visibleFood.map(f => ({ id: f.id, x: f.x, y: f.y, r: f.r, color: f.color, kind: f.kind })),
+    viruses: visibleViruses.map(v => ({ id: v.id, x: v.x, y: v.y, r: v.r, color: v.color, kind: 'virus' }))
   };
 }
 
