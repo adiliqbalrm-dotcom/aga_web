@@ -929,7 +929,18 @@ function snapshotFor(requestingPlayer) {
       money: netWorth(p),
       kills: p.kills,
       cashout: p.cashout,
-      cells: p.cells.map(c => ({ id: c.id, x: c.x, y: c.y, r: c.r, value: Number(c.value || 0), vx: c.vx || 0, vy: c.vy || 0, mergeAt: c.mergeAt || 0 }))
+      cells: p.cells.map(c => ({
+        id: c.id,
+        x: c.x,
+        y: c.y,
+        r: c.r,
+        value: Number(c.value || 0),
+        vx: c.vx || 0,
+        vy: c.vy || 0,
+        mvx: c.moveVx || 0,
+        mvy: c.moveVy || 0,
+        mergeAt: c.mergeAt || 0
+      }))
     }));
 
   const visibleFood = food.filter(f => Math.abs(f.x - viewX) < viewRange && Math.abs(f.y - viewY) < viewRange);

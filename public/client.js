@@ -19,7 +19,6 @@
   const respawnBtn = document.getElementById('respawn-btn');
   const themeToggle = document.getElementById('theme-toggle');
   const themeSwitch = document.querySelector('.theme-switch');
-  const themeIcon = document.querySelector('.theme-switch .moon');
   const skinGrid = document.getElementById('skin-grid');
 
   let dpr = 1;
@@ -73,7 +72,7 @@
   const RADIUS_SMOOTHING_RATE = 10.0;
   const CAMERA_POSITION_RATE = 3.7;
   const CAMERA_ZOOM_RATE = 3.6;
-  const SNAPSHOT_PREDICTION_SECONDS = 0.075;
+  const SNAPSHOT_MAX_EXTRAPOLATE = 0.10;
   const IDLE_CAMERA_RATE = 1.2;
 
   nameInput.value = userName;
@@ -102,7 +101,6 @@
       themeSwitch.classList.toggle('light', !darkTheme);
       themeSwitch.title = darkTheme ? 'Dark mode on' : 'Light mode on';
     }
-    if (themeIcon) themeIcon.textContent = darkTheme ? '☾' : '☀';
   }
 
   function formatTime(seconds) {
@@ -172,7 +170,7 @@
     ws = new WebSocket(`${proto}://${location.host}${location.pathname}`);
 
     ws.onopen = () => {
-      addFeed('Connected to game server');
+      addEphemeralLine('Connected to game server');
       if (hasJoined) joinGame();
     };
 
@@ -187,7 +185,7 @@
     };
 
     ws.onclose = () => {
-      addFeed('Disconnected. Reconnecting...');
+      addEphemeralLine('Disconnected. Reconnecting...');
       setTimeout(connect, 900);
     };
   }
@@ -255,10 +253,10 @@
         addMessageItem(data);
         break;
       case 'system':
-        addFeed(data.message || 'System message');
+        addEphemeralLine(data.message || 'System message');
         break;
       case 'kill':
-        addFeed(`${data.final ? 'Killed' : 'Collected from'} ${data.victim} • Earned $${Number(data.amount || 0).toFixed(2)}`);
+        addEphemeralLine(`${data.final ? 'Killed' : 'Collected from'} ${data.victim} • Earned $${Number(data.amount || 0).toFixed(2)}`);
         break;
       case 'death':
         showDeathResult(data);
@@ -271,6 +269,7 @@
 
   function assimilatePlayers(list) {
     const incoming = new Set();
+    const snapAt = performance.now();
     for (const p of list) {
       incoming.add(p.id);
       const old = state.players.get(p.id);
@@ -279,6 +278,8 @@
         const oldCell = oldCells.get(c.id);
         const vx = Number(c.vx || 0);
         const vy = Number(c.vy || 0);
+        const mvx = Number(c.mvx || 0);
+        const mvy = Number(c.mvy || 0);
         return {
           id: c.id,
           x: oldCell ? oldCell.x : c.x,
@@ -290,6 +291,9 @@
           value: Number(c.value || 0),
           vx,
           vy,
+          mvx,
+          mvy,
+          snapAt,
           mergeAt: c.mergeAt || 0,
           birthTime: oldCell ? oldCell.birthTime : performance.now()
         };
@@ -318,22 +322,40 @@
     }
   }
 
+  const CHAT_FEED_MAX = 10;
+  const EPHEMERAL_FEED_MS = 6000;
+
   function addMessageItem(item) {
     if (!item) return;
     if (item.type === 'chat') {
-      addFeed(`${item.name}: ${item.message}`, item.color);
+      addChatLine(`${item.name}: ${item.message}`, item.color);
     } else if (item.message) {
-      addFeed(item.message);
+      addEphemeralLine(item.message);
     }
   }
 
-  function addFeed(message, color) {
+  function addChatLine(message, color) {
     const line = document.createElement('div');
-    line.className = 'activity-line';
+    line.className = 'activity-line activity-line--chat';
     line.textContent = message;
     if (color) line.style.color = color;
     activityFeed.appendChild(line);
-    while (activityFeed.children.length > 10) activityFeed.removeChild(activityFeed.firstChild);
+    const chatLines = activityFeed.querySelectorAll('.activity-line--chat');
+    while (chatLines.length > CHAT_FEED_MAX) chatLines[0].remove();
+  }
+
+  function addEphemeralLine(message, color) {
+    const line = document.createElement('div');
+    line.className = 'activity-line activity-line--ephemeral';
+    line.textContent = message;
+    if (color) line.style.color = color;
+    activityFeed.appendChild(line);
+    setTimeout(() => {
+      if (!line.isConnected) return;
+      line.classList.add('activity-line--fade-out');
+      line.addEventListener('transitionend', () => line.remove(), { once: true });
+      setTimeout(() => line.remove(), 500);
+    }, EPHEMERAL_FEED_MS);
   }
 
   function startFailCountdown(seconds = 5) {
@@ -487,15 +509,22 @@
     send({ type: 'target', x: mouse.worldX, y: mouse.worldY });
   }
 
-  function interpolateCells(dt) {
+  function predictedCellPosition(cell, now) {
+    const elapsed = Math.min(SNAPSHOT_MAX_EXTRAPOLATE, Math.max(0, (now - (cell.snapAt || now)) / 1000));
+    return {
+      x: cell.tx + (cell.mvx || 0) * elapsed,
+      y: cell.ty + (cell.mvy || 0) * elapsed
+    };
+  }
+
+  function interpolateCells(dt, now) {
     const posEase = frameEase(POSITION_SMOOTHING_RATE, dt);
     const radiusEase = frameEase(RADIUS_SMOOTHING_RATE, dt);
     for (const p of state.players.values()) {
       for (const cell of p.cells) {
-        const predictedX = cell.tx + (cell.vx || 0) * SNAPSHOT_PREDICTION_SECONDS;
-        const predictedY = cell.ty + (cell.vy || 0) * SNAPSHOT_PREDICTION_SECONDS;
-        cell.x = lerp(cell.x, predictedX, posEase);
-        cell.y = lerp(cell.y, predictedY, posEase);
+        const predicted = predictedCellPosition(cell, now);
+        cell.x = lerp(cell.x, predicted.x, posEase);
+        cell.y = lerp(cell.y, predicted.y, posEase);
         cell.r = lerp(cell.r, cell.tr, radiusEase);
       }
     }
@@ -698,9 +727,9 @@
     }
   }
 
-  function drawCellPath(cell, radius) {
+  function drawCellPath(cell, radius, split) {
     const mold = wallMoldInfo(cell, radius);
-    const split = splitStretchInfo(cell);
+    if (!split) split = splitStretchInfo(cell);
     const molded = mold.pressure > 0.001;
     const segments = Math.max(92, Math.min(168, Math.floor(radius * 1.22)));
     const shape = getCellShape(cell, segments);
@@ -759,37 +788,49 @@
     }
   }
 
+  function drawSplitSkin(skin, x, y, radius, split) {
+    ctx.save();
+    const drawR = radius * (1.06 + split.amount * 0.12);
+    const drawSize = Math.round(drawR * 2);
+    const oldSmooth = ctx.imageSmoothingEnabled;
+    const oldQuality = ctx.imageSmoothingQuality;
+    ctx.imageSmoothingEnabled = true;
+    try { ctx.imageSmoothingQuality = 'high'; } catch (_) {}
+    ctx.translate(x, y);
+    if (split.amount > 0.01) {
+      ctx.rotate(split.angle);
+      ctx.scale(1 + split.amount * 1.43, 1 - split.amount * 0.24);
+    }
+    ctx.drawImage(skin, Math.round(-drawR), Math.round(-drawR), drawSize, drawSize);
+    ctx.imageSmoothingEnabled = oldSmooth;
+    try { ctx.imageSmoothingQuality = oldQuality || 'high'; } catch (_) {}
+    ctx.restore();
+  }
+
   function drawCell(cell, player) {
     const r = cell.r;
     const isMe = player.id === myId;
     const mold = wallMoldInfo(cell, r);
+    const split = splitStretchInfo(cell);
     const visualX = cell.x + mold.offsetX;
     const visualY = cell.y + mold.offsetY;
+    const skin = getSkinImage(player.skin);
     ctx.save();
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
     ctx.beginPath();
-    drawCellPath(cell, r);
+    drawCellPath(cell, r, split);
     ctx.closePath();
 
-    ctx.fillStyle = player.color;
-    ctx.fill();
-
-    const skin = getSkinImage(player.skin);
     if (skin) {
       ctx.save();
       ctx.clip();
-      const drawR = r * 1.045;
-      const drawSize = Math.round(drawR * 2);
-      const oldSmooth = ctx.imageSmoothingEnabled;
-      const oldQuality = ctx.imageSmoothingQuality;
-      ctx.imageSmoothingEnabled = true;
-      try { ctx.imageSmoothingQuality = 'high'; } catch (_) {}
-      ctx.drawImage(skin, Math.round(visualX - drawR), Math.round(visualY - drawR), drawSize, drawSize);
-      ctx.imageSmoothingEnabled = oldSmooth;
-      try { ctx.imageSmoothingQuality = oldQuality || 'high'; } catch (_) {}
+      drawSplitSkin(skin, visualX, visualY, r, split);
       ctx.restore();
+    } else {
+      ctx.fillStyle = player.color;
+      ctx.fill();
     }
 
     ctx.lineWidth = Math.max(3, r * 0.055);
@@ -939,7 +980,7 @@
     const dt = Math.min(0.05, Math.max(0.001, (now - lastFrameTime) / 1000));
     lastFrameTime = now;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    interpolateCells(dt);
+    interpolateCells(dt, now);
     updateCamera(dt);
     updateMouseWorld();
     maybeSendTarget(false);
