@@ -324,10 +324,24 @@
 
   const CHAT_FEED_MAX = 10;
   const EPHEMERAL_FEED_MS = 6000;
+  const seenChatKeys = new Set();
+  const MAX_SEEN_CHAT = 60;
+
+  function chatKey(item) {
+    if (item.id != null) return `id:${item.id}`;
+    return `t:${item.time}|${item.name}|${item.message}`;
+  }
 
   function addMessageItem(item) {
     if (!item) return;
     if (item.type === 'chat') {
+      const key = chatKey(item);
+      if (seenChatKeys.has(key)) return;
+      seenChatKeys.add(key);
+      if (seenChatKeys.size > MAX_SEEN_CHAT) {
+        const oldest = seenChatKeys.values().next().value;
+        seenChatKeys.delete(oldest);
+      }
       addChatLine(`${item.name}: ${item.message}`, item.color);
     } else if (item.message) {
       addEphemeralLine(item.message);

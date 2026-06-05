@@ -219,6 +219,7 @@ const food = [];
 const viruses = [];
 const activity = [];
 const chat = [];
+let nextChatId = 1;
 
 function random(min, max) {
   return min + Math.random() * (max - min);
@@ -403,6 +404,7 @@ function pushActivity(message) {
 function pushChat(player, message) {
   const item = {
     type: 'chat',
+    id: nextChatId++,
     name: player.name,
     color: player.color,
     message: String(message || '').slice(0, 180),
