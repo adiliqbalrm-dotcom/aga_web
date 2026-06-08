@@ -8,6 +8,7 @@
   const cashoutText = document.getElementById('cashout-text');
   const cashoutProgress = document.getElementById('cashout-progress');
   const activityFeed = document.getElementById('activity-feed');
+  const killPopups = document.getElementById('kill-popups');
   const chatInput = document.getElementById('chat-input');
   const lobby = document.getElementById('lobby');
   const nameInput = document.getElementById('name-input');
@@ -257,7 +258,7 @@
         addEphemeralLine(data.message || 'System message');
         break;
       case 'kill':
-        addEphemeralLine(`${data.final ? 'Killed' : 'Collected from'} ${data.victim} • Earned $${Number(data.amount || 0).toFixed(2)}`);
+        addKillPopup(data.victim, data.amount, data.final);
         break;
       case 'death':
         showDeathResult(data);
@@ -325,6 +326,8 @@
 
   const CHAT_FEED_MAX = 10;
   const EPHEMERAL_FEED_MS = 6000;
+  const KILL_POPUP_MS = 3400;
+  const KILL_POPUP_MAX = 3;
   const seenChatKeys = new Set();
   const MAX_SEEN_CHAT = 60;
   let chatLineCount = 0;
@@ -348,6 +351,33 @@
     } else if (item.message) {
       addEphemeralLine(item.message);
     }
+  }
+
+  function addKillPopup(victim, amount, final) {
+    if (!killPopups) return;
+    const name = String(victim || 'Player').trim() || 'Player';
+    const earned = Number(amount || 0).toFixed(4);
+    const label = final ? 'Killed' : 'Ate';
+
+    for (const el of killPopups.querySelectorAll('.kill-popup:not(.kill-popup--exit)')) {
+      el.classList.add('kill-popup--fade');
+    }
+
+    const popup = document.createElement('div');
+    popup.className = 'kill-popup';
+    popup.textContent = `${label} ${name} • Earned $${earned}`;
+    killPopups.appendChild(popup);
+
+    while (killPopups.children.length > KILL_POPUP_MAX) {
+      killPopups.firstChild?.remove();
+    }
+
+    setTimeout(() => {
+      if (!popup.isConnected) return;
+      popup.classList.add('kill-popup--exit');
+      popup.addEventListener('transitionend', () => popup.remove(), { once: true });
+      setTimeout(() => popup.remove(), 500);
+    }, KILL_POPUP_MS);
   }
 
   function addChatLine(message, color) {

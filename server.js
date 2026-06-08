@@ -859,14 +859,13 @@ function handleCashout(player, dt) {
   }
 }
 
-function resetMasses(silent = false, resetEarnings = false) {
+function resetMasses(silent = false) {
   for (const player of players.values()) {
     if (!player.alive) continue;
     const p = { x: avgX(player), y: avgY(player) };
-    const currentWorth = resetEarnings ? START_NET_WORTH : Math.max(0, netWorth(player));
-    player.cells = [makeCell(player, p.x, p.y, START_RADIUS, currentWorth || START_NET_WORTH)];
-    if (resetEarnings) player.kills = 0;
-    player.money = netWorth(player);
+    player.cells = [makeCell(player, p.x, p.y, START_RADIUS, START_NET_WORTH)];
+    player.kills = 0;
+    player.money = START_NET_WORTH;
     player.cashout = { active: false, timer: 0, locked: false };
   }
   food.length = 0;
@@ -893,7 +892,7 @@ function tick() {
     }
   } else {
     if (timerRunning || resetTimer !== RESET_SECONDS) {
-      resetMasses(true, true);
+      resetMasses(true);
     }
     timerRunning = false;
     resetTimer = RESET_SECONDS;
@@ -986,7 +985,7 @@ function handleMessage(player, raw) {
       if (!hadHumans) {
         timerRunning = true;
         resetTimer = RESET_SECONDS;
-        resetMasses(true, true);
+        resetMasses(true);
       }
       balanceBots();
       send(player, { type: 'history', items: [...activity.slice(-15), ...chat.slice(-15)].sort((a, b) => a.time - b.time) });
@@ -1025,7 +1024,7 @@ function handleMessage(player, raw) {
         if (!hadHumans) {
           timerRunning = true;
           resetTimer = RESET_SECONDS;
-          resetMasses(true, true);
+          resetMasses(true);
         }
         balanceBots();
       }
