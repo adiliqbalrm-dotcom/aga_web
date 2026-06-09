@@ -44,6 +44,7 @@
   ];
   const skinImages = new Map();
   const cellShapeCache = new Map();
+  const virusShapeCache = new Map();
 
   const state = {
     worldSize: 7000,
@@ -244,6 +245,10 @@
         assimilatePlayers(data.players || []);
         state.food = data.food || [];
         state.viruses = data.viruses || [];
+        const liveVirusIds = new Set((data.viruses || []).map(v => v.id));
+        for (const cachedId of virusShapeCache.keys()) {
+          if (!liveVirusIds.has(cachedId)) virusShapeCache.delete(cachedId);
+        }
         state.leaderboard = data.leaderboard || [];
         updateHud();
         break;
@@ -698,23 +703,66 @@
     ctx.restore();
   }
 
+  function getVirusShape(v, points) {
+    let shape = virusShapeCache.get(v.id);
+    if (!shape || shape.values.length !== points) {
+      const values = new Array(points);
+      const velocity = new Array(points);
+      const phase = (Number(v.id) || Math.random() * 9999) * 0.011;
+      for (let i = 0; i < points; i++) {
+        values[i] = Math.sin(phase + i * 1.31) * 0.024;
+        velocity[i] = 0;
+      }
+      shape = { values, velocity, phase, last: performance.now() };
+      virusShapeCache.set(v.id, shape);
+    }
+    return shape;
+  }
+
+  function updateVirusShape(v, shape) {
+    const now = performance.now();
+    const dt = Math.min(0.05, Math.max(0.001, (now - shape.last) / 1000));
+    shape.last = now;
+    const n = shape.values.length;
+    for (let i = 0; i < n; i++) {
+      const prev = shape.values[(i - 1 + n) % n];
+      const next = shape.values[(i + 1) % n];
+      const wave = Math.sin(now * 0.0031 + shape.phase + i * 0.62) * 0.032;
+      const target = (prev + next) * 0.34 + wave;
+      shape.velocity[i] += (target - shape.values[i]) * 3.8 * dt;
+      shape.velocity[i] *= Math.pow(0.025, dt);
+      shape.values[i] += shape.velocity[i];
+      shape.values[i] = clamp(shape.values[i], -0.085, 0.085);
+    }
+  }
+
   function drawVirus(v) {
     ctx.save();
     const teeth = 40;
+    const points = teeth * 2;
     const outer = v.r * 1.02;
     const inner = v.r * 0.945;
+    const shape = getVirusShape(v, points);
+    updateVirusShape(v, shape);
+    const now = performance.now();
+    const bodyPulse = 1 + Math.sin(now * 0.0026 + shape.phase) * 0.024;
+    const wobble = v.r * 0.12;
 
     ctx.beginPath();
-    for (let i = 0; i <= teeth * 2; i++) {
-      const a = (Math.PI * i) / teeth;
-      const rr = i % 2 === 0 ? outer : inner;
+    for (let i = 0; i <= points; i++) {
+      const idx = i % points;
+      const a = (Math.PI * idx) / teeth;
+      const isOuter = idx % 2 === 0;
+      const base = (isOuter ? outer : inner) * bodyPulse;
+      const organic = shape.values[idx] * wobble * (isOuter ? 1 : 0.78);
+      const rr = base + organic;
       const x = v.x + Math.cos(a) * rr;
       const y = v.y + Math.sin(a) * rr;
       if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     }
     ctx.closePath();
-    ctx.lineJoin = 'miter';
-    ctx.miterLimit = 2;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
     ctx.fillStyle = '#00ff00';
     ctx.strokeStyle = '#13bf00';
     ctx.lineWidth = Math.max(2.5, v.r * 0.045);
@@ -1073,9 +1121,6 @@
       const fr = Math.max(3, f.r || 7);
       if (inView(f.x, f.y, fr, bounds)) drawFoodPellet(f, simpleFood);
     }
-    for (const v of state.viruses) {
-      if (inView(v.x, v.y, v.r || 80, bounds)) drawVirus(v);
-    }
     const playerList = [...state.players.values()];
     playerList.sort((a, b) => {
       let ar = 0;
@@ -1086,6 +1131,9 @@
     });
     for (const p of playerList) {
       for (const cell of p.cells) drawCell(cell, p, bounds);
+    }
+    for (const v of state.viruses) {
+      if (inView(v.x, v.y, v.r || 80, bounds)) drawVirus(v);
     }
     ctx.restore();
     drawTouchUi();
